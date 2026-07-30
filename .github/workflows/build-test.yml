@@ -1,0 +1,49 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
+
+concurrency:
+  # Cancel in-progress runs on PR update
+  group: ci-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Run tests
+        run: make test
+
+      - name: Build schema
+        env:
+          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
+          KSL_OUTPUT_DIR: output/ksl
+        run: |
+          make build-interpreter
+          ./bin/interpreter
+
+      - name: Verify schema output
+        run: |
+          if [ -z "$(find output/jsonschema -type f 2>/dev/null | head -1)" ]; then
+            echo "error: output/jsonschema is empty or missing" >&2
+            exit 1
+          fi
+          if [ -z "$(find output/ksl -type f 2>/dev/null | head -1)" ]; then
+            echo "error: output/ksl is empty or missing" >&2
+            exit 1
+          fi
+          echo "Schema generation produced artifacts:"
+          find output/jsonschema output/ksl -type f | sort
