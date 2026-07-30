@@ -1,0 +1,80 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel in-progress runs on PR update
+  group: ci-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Run tests
+        run: make test
+
+      - name: Build schema
+        env:
+          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
+          KSL_OUTPUT_DIR: output/ksl
+        run: |
+          make build-interpreter
+          ./bin/interpreter
+
+      - name: Verify schema output
+        run: |
+          # Derive expected artifacts from schema sources so the check
+          # tracks added/removed resources without a hardcoded path list.
+          set -euo pipefail
+          shopt -s nullglob
+          declare -A expected
+          for star in schema/*/reporters/*/*.star; do
+            type="${star#schema/}"
+            type="${type%%/*}"
+            reporter="${star#schema/*/reporters/}"
+            reporter="${reporter%%/*}"
+            expected["output/jsonschema/${type}/common_representation.json"]=1
+            expected["output/jsonschema/${type}/reporters/${reporter}/${type}.json"]=1
+            expected["output/ksl/${reporter}.json"]=1
+          done
+          if [[ ${#expected[@]} -eq 0 ]]; then
+            echo "error: no schema/*/reporters/*/*.star sources found" >&2
+            exit 1
+          fi
+
+          failed=0
+          for f in "${!expected[@]}"; do
+            if [[ ! -s "$f" ]]; then
+              echo "error: missing or empty: $f" >&2
+              failed=1
+              continue
+            fi
+            if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f"; then
+              echo "error: invalid JSON: $f" >&2
+              failed=1
+            fi
+          done
+          if [[ "$failed" -ne 0 ]]; then
+            exit 1
+          fi
+          echo "Schema generation produced artifacts:"
+          find output/jsonschema output/ksl -type f | sort
