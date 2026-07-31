@@ -46,7 +46,6 @@ jobs:
       - name: Build schema artifacts
         env:
           JSONSCHEMA_OUTPUT_DIR: output/jsonschema
-          KSL_OUTPUT_DIR: output/ksl
         run: |
           make build-interpreter
           ./bin/interpreter
@@ -91,7 +90,6 @@ jobs:
 
       - name: Build schema artifacts
         env:
-          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
           KSL_OUTPUT_DIR: output/ksl
         run: |
           make build-interpreter
