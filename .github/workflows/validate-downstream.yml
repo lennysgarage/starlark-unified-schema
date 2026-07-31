@@ -13,11 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # KSL files delivered to rbac-config. Generation covers all reporters
-  # (hbi.json, rbac.json, features.json) but hbi/rbac namespaces are still
-  # hand-authored .ksl in rbac-config — delivering those causes "symbol
-  # already exists" errors. Extend this list as namespaces migrate.
-  KSL_RELEASE_FILES: features.json
+  # Features-only emission for downstream validation. HBI/RBAC stay in
+  # schema/ so build-test still exercises them, but they remain hand-authored
+  # downstream — listing only these modules emits features artifacts while
+  # still resolving workspace via load(). Drop the file list (full walk)
+  # once those services onboard.
+  SHIPPED_SCHEMA_FILES: >-
+    service/reporters/features/service.star
+    billing_account/reporters/features/billing_account.star
 
 jobs:
   validate-inventory-api:
@@ -48,7 +51,8 @@ jobs:
           JSONSCHEMA_OUTPUT_DIR: output/jsonschema
         run: |
           make build-interpreter
-          ./bin/interpreter
+          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
+          ./bin/interpreter $SHIPPED_SCHEMA_FILES
 
       - name: Copy schema artifacts
         run: |
@@ -93,17 +97,16 @@ jobs:
           KSL_OUTPUT_DIR: output/ksl
         run: |
           make build-interpreter
-          ./bin/interpreter
+          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
+          ./bin/interpreter $SHIPPED_SCHEMA_FILES
 
       - name: Copy KSL artifacts
         run: |
-          for f in $KSL_RELEASE_FILES; do
-            if [[ ! -s "output/ksl/$f" ]]; then
-              echo "error: expected KSL artifact missing or empty: output/ksl/$f" >&2
-              exit 1
-            fi
-            cp "output/ksl/$f" rbac-config/configs/stage/schemas/src/
-          done
+          if [[ ! -s output/ksl/features.json ]]; then
+            echo "error: expected KSL artifact missing or empty: output/ksl/features.json" >&2
+            exit 1
+          fi
+          cp output/ksl/features.json rbac-config/configs/stage/schemas/src/
           echo "KSL source files after copy:"
           ls -la rbac-config/configs/stage/schemas/src/
 
