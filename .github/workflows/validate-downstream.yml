@@ -1,0 +1,127 @@
+name: Validate Downstream Consumers
+
+on:
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel in-progress runs on PR update
+  group: downstream-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # KSL files delivered to rbac-config. Generation covers all reporters
+  # (hbi.json, rbac.json, features.json) but hbi/rbac namespaces are still
+  # hand-authored .ksl in rbac-config — delivering those causes "symbol
+  # already exists" errors. Extend this list as namespaces migrate.
+  KSL_RELEASE_FILES: features.json
+
+jobs:
+  validate-inventory-api:
+    name: Validate inventory-api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Clone inventory-api
+        uses: actions/checkout@v7
+        with:
+          repository: project-kessel/inventory-api
+          path: inventory-api
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: inventory-api/go.mod
+          cache-dependency-path: |
+            interpreter/go.sum
+            inventory-api/go.sum
+
+      - name: Build schema artifacts
+        env:
+          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
+          KSL_OUTPUT_DIR: output/ksl
+        run: |
+          make build-interpreter
+          ./bin/interpreter
+
+      - name: Copy schema artifacts
+        run: |
+          cp -r output/jsonschema/* inventory-api/data/schema/resources/
+          echo "Schema resources after copy:"
+          find inventory-api/data/schema/resources -type f | sort
+
+      - name: Build schema tarball
+        working-directory: inventory-api
+        run: |
+          tar czf resources.tar.gz -C data/schema/resources .
+          echo "Tarball contents:"
+          tar tzf resources.tar.gz
+
+      - name: Validate schema loading
+        working-directory: inventory-api
+        run: go run main.go preload-schema
+
+  validate-rbac-config:
+    name: Validate rbac-config
+    runs-on: ubuntu-latest
+    # TODO(RHCLOUD-49724): remove continue-on-error once rbac-config's
+    # rbac.ksl adds the descendants relation on workspace (or starlark
+    # features stops referencing it). see KSL-067 for handling workspace inheritance.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Clone rbac-config
+        uses: actions/checkout@v7
+        with:
+          repository: project-kessel/rbac-config
+          path: rbac-config
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Build schema artifacts
+        env:
+          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
+          KSL_OUTPUT_DIR: output/ksl
+        run: |
+          make build-interpreter
+          ./bin/interpreter
+
+      - name: Copy KSL artifacts
+        run: |
+          for f in $KSL_RELEASE_FILES; do
+            if [[ ! -s "output/ksl/$f" ]]; then
+              echo "error: expected KSL artifact missing or empty: output/ksl/$f" >&2
+              exit 1
+            fi
+            cp "output/ksl/$f" rbac-config/configs/stage/schemas/src/
+          done
+          echo "KSL source files after copy:"
+          ls -la rbac-config/configs/stage/schemas/src/
+
+      - name: Install KSL toolchain
+        working-directory: rbac-config
+        run: make init
+
+      - name: Compile KSL schema
+        working-directory: rbac-config
+        run: make ksl-schema-stage
+
+      - name: Validate SpiceDB schema
+        uses: authzed/action-spicedb-validate@v1
+        with:
+          validationfile: rbac-config/configs/stage/schemas/schema.zed
