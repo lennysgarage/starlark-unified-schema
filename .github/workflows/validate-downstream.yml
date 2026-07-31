@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   # Cancel in-progress runs on PR update
-  group: downstream-${{ github.head_ref || github.run_id }}
+  group: downstream-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -24,19 +24,19 @@ jobs:
     name: Validate inventory-api
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Clone inventory-api
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: project-kessel/inventory-api
           path: inventory-api
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: inventory-api/go.mod
           cache-dependency-path: |
@@ -72,19 +72,19 @@ jobs:
     name: Validate rbac-config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Clone rbac-config
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: project-kessel/rbac-config
           path: rbac-config
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: interpreter/go.mod
           cache-dependency-path: interpreter/go.sum
@@ -118,6 +118,6 @@ jobs:
         run: make ksl-schema-stage
 
       - name: Validate SpiceDB schema
-        uses: authzed/action-spicedb-validate@v1
+        uses: authzed/action-spicedb-validate@3c2214196c200ff012a12d4fc12204efa7a3a416 # v1.0.1
         with:
           validationfile: rbac-config/configs/stage/schemas/schema.zed
