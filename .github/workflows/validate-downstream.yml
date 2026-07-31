@@ -71,10 +71,6 @@ jobs:
   validate-rbac-config:
     name: Validate rbac-config
     runs-on: ubuntu-latest
-    # TODO(RHCLOUD-49724): remove continue-on-error once rbac-config's
-    # rbac.ksl adds the descendants relation on workspace (or starlark
-    # features stops referencing it). see KSL-067 for handling workspace inheritance.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -118,10 +114,24 @@ jobs:
         run: make init
 
       - name: Compile KSL schema
+        id: ksl-compile
         working-directory: rbac-config
-        run: make ksl-schema-stage
+        run: |
+          set -o pipefail
+          if make ksl-schema-stage 2>&1 | tee /tmp/ksl-output.txt; then
+            echo "compile_ok=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "relation descendants not found" /tmp/ksl-output.txt; then
+            # TODO(RHCLOUD-49724): remove once the partial_resource type
+            # change lands or rbac.ksl adds descendants on workspace.
+            echo "::warning::Known issue: features.json references workspace.descendants not yet in rbac.ksl (KSL-067)"
+            echo "compile_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unexpected KSL compilation error"
+            exit 1
+          fi
 
       - name: Validate SpiceDB schema
+        if: steps.ksl-compile.outputs.compile_ok == 'true'
         uses: authzed/action-spicedb-validate@v1
         with:
           validationfile: rbac-config/configs/stage/schemas/schema.zed
