@@ -120,14 +120,18 @@ jobs:
           set -o pipefail
           if make ksl-schema-stage 2>&1 | tee /tmp/ksl-output.txt; then
             echo "compile_ok=true" >> "$GITHUB_OUTPUT"
-          elif grep -q "relation descendants not found" /tmp/ksl-output.txt; then
-            # TODO(RHCLOUD-49724): remove once the partial_resource type
-            # change lands or rbac.ksl adds descendants on workspace.
-            echo "::warning::Known issue: features.json references workspace.descendants not yet in rbac.ksl (KSL-067)"
-            echo "compile_ok=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Unexpected KSL compilation error"
-            exit 1
+            unexpected=$(grep -i "^Error:" /tmp/ksl-output.txt | grep -v "relation descendants not found" || true)
+            if [[ -z "$unexpected" ]] && grep -q "relation descendants not found" /tmp/ksl-output.txt; then
+              # TODO(RHCLOUD-49724): remove once the partial_resource type
+              # change lands or rbac.ksl adds descendants on workspace.
+              echo "::warning::Known issue: features.json references workspace.descendants not yet in rbac.ksl (KSL-067)"
+              echo "compile_ok=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "KSL compilation failed with unexpected errors:"
+              cat /tmp/ksl-output.txt
+              exit 1
+            fi
           fi
 
       - name: Validate SpiceDB schema
