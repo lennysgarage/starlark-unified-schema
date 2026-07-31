@@ -71,9 +71,6 @@ jobs:
   validate-rbac-config:
     name: Validate rbac-config
     runs-on: ubuntu-latest
-    # TODO(RHCLOUD-49724): remove continue-on-error once partial_resource
-    # type change lands and resolves the descendants issue (KSL-067).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -117,28 +114,10 @@ jobs:
         run: make init
 
       - name: Compile KSL schema
-        id: ksl-compile
         working-directory: rbac-config
-        run: |
-          set -o pipefail
-          if make ksl-schema-stage 2>&1 | tee /tmp/ksl-output.txt; then
-            echo "compile_ok=true" >> "$GITHUB_OUTPUT"
-          else
-            unexpected=$(grep -i "^Error:" /tmp/ksl-output.txt | grep -v "relation descendants not found" || true)
-            if [[ -z "$unexpected" ]] && grep -q "relation descendants not found" /tmp/ksl-output.txt; then
-              # TODO(RHCLOUD-49724): remove once the partial_resource type
-              # change lands or rbac.ksl adds descendants on workspace.
-              echo "::warning::Known issue: features.json references workspace.descendants not yet in rbac.ksl (KSL-067)"
-              echo "compile_ok=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "KSL compilation failed with unexpected errors:"
-              cat /tmp/ksl-output.txt
-              exit 1
-            fi
-          fi
+        run: make ksl-schema-stage
 
       - name: Validate SpiceDB schema
-        if: steps.ksl-compile.outputs.compile_ok == 'true'
         uses: authzed/action-spicedb-validate@v1
         with:
           validationfile: rbac-config/configs/stage/schemas/schema.zed
