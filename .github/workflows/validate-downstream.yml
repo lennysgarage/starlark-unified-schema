@@ -127,6 +127,18 @@ jobs:
               # change lands or rbac.ksl adds descendants on workspace.
               echo "::warning::Known issue: features.json references workspace.descendants not yet in rbac.ksl (KSL-067)"
               echo "compile_ok=false" >> "$GITHUB_OUTPUT"
+              {
+                echo '> [!WARNING]'
+                echo '> **KSL compilation skipped known error — not fully green**'
+                echo '>'
+                echo '> `features.json` references `rbac.workspace.descendants`, which does not'
+                echo '> exist in rbac-config'"'"'s hand-authored `rbac.ksl` yet.'
+                echo '>'
+                echo '> **Track:** KSL-067 / RHCLOUD-49724'
+                echo '>'
+                echo '> **Fix:** land the `partial_resource` type change or add `descendants` to `rbac.ksl`.'
+                echo '> Once fixed, remove the `descendants` tolerance in this workflow.'
+              } >> "$GITHUB_STEP_SUMMARY"
             else
               echo "KSL compilation failed with unexpected errors:"
               cat /tmp/ksl-output.txt
