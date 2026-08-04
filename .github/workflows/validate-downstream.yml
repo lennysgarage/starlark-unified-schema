@@ -12,16 +12,6 @@ concurrency:
   group: downstream-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
-env:
-  # Features-only emission for downstream validation. HBI/RBAC stay in
-  # schema/ so build-test still exercises them, but they remain hand-authored
-  # downstream — listing only these modules emits features artifacts while
-  # still resolving workspace via load(). Drop the file list (full walk)
-  # once those services onboard.
-  SHIPPED_SCHEMA_FILES: >-
-    service/reporters/features/service.star
-    billing_account/reporters/features/billing_account.star
-
 jobs:
   validate-inventory-api:
     name: Validate inventory-api
@@ -46,12 +36,7 @@ jobs:
           cache-dependency-path: interpreter/go.sum
 
       - name: Build schema artifacts
-        env:
-          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
-        run: |
-          make build-interpreter
-          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
-          ./bin/interpreter $SHIPPED_SCHEMA_FILES
+        run: make build-shipped-schema
 
       - name: Copy schema artifacts
         run: |
@@ -99,12 +84,7 @@ jobs:
           cache-dependency-path: interpreter/go.sum
 
       - name: Build schema artifacts
-        env:
-          KSL_OUTPUT_DIR: output/ksl
-        run: |
-          make build-interpreter
-          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
-          ./bin/interpreter $SHIPPED_SCHEMA_FILES
+        run: make build-shipped-schema
 
       - name: Copy KSL artifacts
         run: |

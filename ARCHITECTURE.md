@@ -325,12 +325,12 @@ Starlark `load()` imports enforce this ordering naturally — dependent modules 
 
 ### Artifact Promotion Boundary
 
-Generated artifacts are gitignored in this repository. They are promoted to downstream repos via PRs:
+Generated artifacts are gitignored in this repository. Pushes to `main` that change `schema/**` (or a manual Actions run) publish them as GitHub Release assets (`jsonschema.tar.gz`, `ksl.tar.gz`) with date-based tags (`vYYYYMMDD.n`). Consumers download from those releases:
 
 - JSON Schema → inventory-api `data/schema/resources/`
-- KSIL JSON → rbac-config `configs/<env>/schemas/src/`
+- KSIL JSON (`features.json` only today) → rbac-config `configs/<env>/schemas/src/`
 
-Only Starlark source belongs in this repository.
+Only Starlark source belongs in this repository. Local dry-run: `make package-release`.
 
 ## Component Interfaces
 

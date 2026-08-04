@@ -1,0 +1,64 @@
+name: Release Schema Artifacts
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'schema/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Package release artifacts
+        run: make package-release
+
+      - name: Compute release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y%m%d)
+          # Next suffix = max existing vYYYYMMDD.N tag + 1 (not count; gaps/deletes stay safe).
+          MAX=$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/v${DATE}." --jq \
+            '[.[].ref | capture("^refs/tags/v[0-9]+\\.(?<n>[0-9]+)$") | .n | tonumber] | max // 0')
+          TAG="v${DATE}.$((MAX + 1))"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "error: tag ${TAG} already exists" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "Computed release tag: ${TAG}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            jsonschema.tar.gz \
+            ksl.tar.gz \
+            --title "Schema artifacts ${{ steps.tag.outputs.tag }}" \
+            --generate-notes
