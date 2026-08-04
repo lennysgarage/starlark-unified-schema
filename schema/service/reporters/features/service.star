@@ -1,3 +1,4 @@
+# Trigger test for schema-path release workflow.
 load("kessel.star", "resource", "uuid", "many", "at_most_one", "self", "any")
 load("workspace/reporters/rbac/workspace.star", "workspace")
 load("billing_account/reporters/features/billing_account.star", "billing_account")
