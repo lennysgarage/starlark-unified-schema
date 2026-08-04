@@ -1,0 +1,130 @@
+name: Validate Downstream Consumers
+
+on:
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel in-progress runs on PR update
+  group: downstream-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # Features-only emission for downstream validation. HBI/RBAC stay in
+  # schema/ so build-test still exercises them, but they remain hand-authored
+  # downstream — listing only these modules emits features artifacts while
+  # still resolving workspace via load(). Drop the file list (full walk)
+  # once those services onboard.
+  SHIPPED_SCHEMA_FILES: >-
+    service/reporters/features/service.star
+    billing_account/reporters/features/billing_account.star
+
+jobs:
+  validate-inventory-api:
+    name: Validate inventory-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Clone inventory-api
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: project-kessel/inventory-api
+          path: inventory-api
+          persist-credentials: false
+
+      - name: Setup Go (interpreter)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Build schema artifacts
+        env:
+          JSONSCHEMA_OUTPUT_DIR: output/jsonschema
+        run: |
+          make build-interpreter
+          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
+          ./bin/interpreter $SHIPPED_SCHEMA_FILES
+
+      - name: Copy schema artifacts
+        run: |
+          cp -r output/jsonschema/* inventory-api/data/schema/resources/
+          echo "Schema resources after copy:"
+          find inventory-api/data/schema/resources -type f | sort
+
+      - name: Build schema tarball
+        working-directory: inventory-api
+        run: |
+          tar czf resources.tar.gz -C data/schema/resources .
+          echo "Tarball contents:"
+          tar tzf resources.tar.gz
+
+      - name: Setup Go (inventory-api)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: inventory-api/go.mod
+          cache-dependency-path: inventory-api/go.sum
+
+      - name: Validate schema loading
+        working-directory: inventory-api
+        run: go run main.go preload-schema
+
+  validate-rbac-config:
+    name: Validate rbac-config
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Clone rbac-config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: project-kessel/rbac-config
+          path: rbac-config
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
+
+      - name: Build schema artifacts
+        env:
+          KSL_OUTPUT_DIR: output/ksl
+        run: |
+          make build-interpreter
+          # shellcheck disable=SC2086 # intentional word-split of SHIPPED_SCHEMA_FILES
+          ./bin/interpreter $SHIPPED_SCHEMA_FILES
+
+      - name: Copy KSL artifacts
+        run: |
+          if [[ ! -s output/ksl/features.json ]]; then
+            echo "error: expected KSL artifact missing or empty: output/ksl/features.json" >&2
+            exit 1
+          fi
+          cp output/ksl/features.json rbac-config/configs/stage/schemas/src/
+          echo "KSL source files after copy:"
+          ls -la rbac-config/configs/stage/schemas/src/
+
+      - name: Install KSL toolchain
+        working-directory: rbac-config
+        run: make init
+
+      - name: Compile KSL schema
+        working-directory: rbac-config
+        run: make ksl-schema-stage
+
+      - name: Validate SpiceDB schema
+        uses: authzed/action-spicedb-validate@3c2214196c200ff012a12d4fc12204efa7a3a416 # v1.0.1
+        with:
+          validationfile: rbac-config/configs/stage/schemas/schema.zed
