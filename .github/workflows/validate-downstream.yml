@@ -26,6 +26,7 @@ jobs:
   validate-inventory-api:
     name: Validate inventory-api
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -38,13 +39,11 @@ jobs:
           path: inventory-api
           persist-credentials: false
 
-      - name: Setup Go
+      - name: Setup Go (interpreter)
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: inventory-api/go.mod
-          cache-dependency-path: |
-            interpreter/go.sum
-            inventory-api/go.sum
+          go-version-file: interpreter/go.mod
+          cache-dependency-path: interpreter/go.sum
 
       - name: Build schema artifacts
         env:
@@ -67,6 +66,12 @@ jobs:
           echo "Tarball contents:"
           tar tzf resources.tar.gz
 
+      - name: Setup Go (inventory-api)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: inventory-api/go.mod
+          cache-dependency-path: inventory-api/go.sum
+
       - name: Validate schema loading
         working-directory: inventory-api
         run: go run main.go preload-schema
@@ -74,6 +79,7 @@ jobs:
   validate-rbac-config:
     name: Validate rbac-config
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
