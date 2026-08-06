@@ -190,15 +190,19 @@ Only Starlark source belongs in this repository; generated artifacts are not com
 
 ### Step 2 — Update JSON Schema in inventory-api
 
-1. Copy the relevant files from `output/jsonschema/` into [inventory-api](https://github.com/project-kessel/inventory-api) at `data/schema/resources/`, preserving the directory structure.
-2. Open a PR in inventory-api with the updated JSON Schema files.
-3. Follow inventory-api's contributing and CI requirements.
+Merges to `main` that change `schema/**` publish `jsonschema.tar.gz` as a GitHub Release asset (date-tagged `vYYYYMMDD.n`). The release workflow can also be run manually via Actions. Until consumer automation lands, pull the release manually:
+
+1. Download `jsonschema.tar.gz` from the [releases page](https://github.com/project-kessel/starlark-unified-schema/releases) (or run `make package-release` locally for a dry-run).
+2. Extract into [inventory-api](https://github.com/project-kessel/inventory-api) at `data/schema/resources/` (additive — do not delete resource types not modeled here).
+3. In inventory-api, run `make build-schemas` and `go run main.go preload-schema`, then open a PR with the updated schemas and generated files.
 
 ### Step 3 — Update KSIL in rbac-config
 
-1. Copy the relevant namespace JSON files from `output/ksl/` into [rbac-config](https://github.com/project-kessel/rbac-config) at `configs/stage/schemas/src/` (and `configs/prod/schemas/src/` when promoting to production).
-2. Run `make ksl-test-schema-stage` (or prod) in rbac-config to validate the compiled authorization schema.
-3. Open a PR in rbac-config.
+The same release also publishes `ksl.tar.gz` (currently `features.json` only; HBI/RBAC namespaces stay hand-authored in rbac-config).
+
+1. Download `ksl.tar.gz` from the release (or use local `make package-release`).
+2. Extract into [rbac-config](https://github.com/project-kessel/rbac-config) at `configs/stage/schemas/src/` (promote `.json` to prod separately when ready).
+3. Run `make ksl-test-schema-stage` (or prod) in rbac-config to validate, then open a PR.
 
 Coordinate PRs across repositories so schema, inventory validation, and authorization stay in sync. Link related PRs in each description when the change spans multiple repos.
 
@@ -219,8 +223,10 @@ make build-interpreter-debug
 | `make build-interpreter` | Build the compiler to `bin/interpreter` |
 | `make build-interpreter-debug` | Build with debug symbols for delve/VS Code |
 | `make build-schema` | Build interpreter and compile all schemas |
+| `make build-shipped-schema` | Build only consumer-delivered schemas (features allowlist) |
+| `make package-release` | Build shipped schemas and write `jsonschema.tar.gz` + `ksl.tar.gz` |
 | `make test` | Run Go unit tests |
-| `make clean` | Remove `bin/` and `output/` |
+| `make clean` | Remove `bin/`, `output/`, and release tarballs |
 
 ## License
 
