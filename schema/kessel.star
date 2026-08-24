@@ -90,12 +90,21 @@ def _get_relation_names(self_names, types):
                 result[name] = True
             for name in type.common:
                 result[name] = True
+            #TODO: will need to traverse the parent type as well once references to sub-types are supported
         else:
             fail("Unknown relation type: {}".format(type.kind))
     return result.keys()
 
-def _create_proxy(common, fields, permission_names):
+def _create_proxy(common, parent, fields, permission_names):
     fields_types = _extract_relation_types(common) | _extract_relation_types(fields)
+
+    if parent != None:
+        fields_types = fields_types | _extract_relation_types(parent.fields) | _extract_relation_types(parent.common)
+        for name in parent.fields:
+            p = parent.fields[name]
+            if type(p) == "struct" and p.kind == "permission":
+                permission_names.append(name) #Include permission names from the parent type
+
     self_names = fields_types.keys() + permission_names
     proxy_fields = {}
 
@@ -105,10 +114,11 @@ def _create_proxy(common, fields, permission_names):
     for permission_name in permission_names:
         proxy_fields[permission_name] = _make_ref(permission_name, [])
 
+
     return struct(kind="proxy", **proxy_fields)
 
-def _process_permissions(common, object, permissions):
-    proxy = _create_proxy(common, object, permissions.keys())
+def _process_permissions(common, parent, object, permissions):
+    proxy = _create_proxy(common, parent, object, permissions.keys())
     combined_fields = {}
 
     for field_name in object:
@@ -121,9 +131,18 @@ def _process_permissions(common, object, permissions):
 
     return combined_fields
 
-def resource(reporter, id_type, common={}, fields={}, permissions={}):
-    combined_fields = _process_permissions(common, fields, permissions)
-    return struct(kind="resource", reporter=reporter, id_type=id_type, common=common, fields=combined_fields)
+def resource(reporter, id_type=None, extends=None, final=False, common={}, fields={}, permissions={}):
+    if id_type == None and extends==None:
+        fail("resource: either an id_type or a type to extend must be specified")
+
+    if extends != None:
+        final=True #Only allow one level of inheritance
+        if id_type != None:
+            fail("resource: a resource type extending another type must not specify an id_type")
+        id_type = extends.id_type #Inherit the id type from the parent
+
+    combined_fields = _process_permissions(common, extends, fields, permissions)
+    return struct(kind="resource", reporter=reporter, id_type=id_type, parent=extends, final=final, common=common, fields=combined_fields)
 
 def text(minLength=None, maxLength=None, regex=None):
     return struct(kind="text", minLength=minLength, maxLength=maxLength, regex=regex)

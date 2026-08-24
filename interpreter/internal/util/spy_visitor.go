@@ -30,7 +30,7 @@ type node map[string]any
 
 func (v *SpyVisitor) BeginType(name string) {}
 
-func (v *SpyVisitor) VisitResource(typeName string, reporter string, commonMembers *output.Members, reporterMembers *output.Members) error {
+func (v *SpyVisitor) VisitResource(typeName string, reporter string, commonMembers *output.Members, reporterMembers *output.Members, extendsResource *output.ResourceTypeReference) error {
 	entry, exists := v.root[typeName].(node)
 	if !exists {
 		entry = createNode(map[string]any{"common": nil, "reporters": node{}})
@@ -44,7 +44,12 @@ func (v *SpyVisitor) VisitResource(typeName string, reporter string, commonMembe
 		if _, dup := reporters[reporter]; dup {
 			return fmt.Errorf("resource %s: reporter '%s' registered more than once", typeName, reporter)
 		}
-		reporters[reporter] = createNode(map[string]any{"fields": reporterMembers.DataFields, "relations": reporterMembers.RelationFields, "permissions": reporterMembers.Permissions})
+
+		data := createNode(map[string]any{"fields": reporterMembers.DataFields, "relations": reporterMembers.RelationFields, "permissions": reporterMembers.Permissions})
+		if extendsResource != nil {
+			data["extends"] = createNode(map[string]any{"name": extendsResource.Name, "reporter": extendsResource.Reporter})
+		}
+		reporters[reporter] = data
 	}
 
 	return nil
