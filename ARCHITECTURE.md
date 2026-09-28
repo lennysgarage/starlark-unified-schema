@@ -89,10 +89,10 @@ These map directly to inventory-api paths under `data/schema/resources/`.
 | Input from processor | JSON Schema output |
 |----------------------|-------------------|
 | Data fields | Object properties with types, constraints, `required` |
-| Relations | Mapped to data-field shapes by cardinality (`at_most_one` → optional scalar; `one` → required scalar; `at_least_one` → array with at least one item; `many` → array;) |
+| Relations | Mapped to input-field shapes by cardinality: `at_most_one` → optional scalar; `one` → required scalar; `at_least_one` → required array with at least one item; `many` → optional array; `wildcard` (`All`) → optional boolean |
 | Permissions | Ignored |
 
-Resources are grouped by **type name** (the Starlark variable name, e.g. `host`). Relations use the target resource's `id_type`, not a nested object schema.
+Resources are grouped by **type name** (the Starlark variable name, e.g. `host`). Relations use the target resource's `id_type`, not a nested object schema. A wildcard relation accepts `true` or `false`, or may be omitted; the legacy `reporter/type:*` string marker is not accepted. KSIL still receives the original typed wildcard relation.
 
 ### 2. KSIL Output
 

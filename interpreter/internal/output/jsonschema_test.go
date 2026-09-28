@@ -363,8 +363,17 @@ func TestJSONSchemaVisitorRelationFields(t *testing.T) {
 				}`,
 				`{
 					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
+					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"]
+				}`,
+				`{
+					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
 					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"],
-					"wildcard": "test/other:*"
+					"wildcard": true
+				}`,
+				`{
+					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
+					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"],
+					"wildcard": false
 				}`,
 			},
 			invalid: []string{
@@ -374,7 +383,17 @@ func TestJSONSchemaVisitorRelationFields(t *testing.T) {
 				`{
 					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
 					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"],
-					"wildcard": "test/some:*"
+					"wildcard": "test/other:*"
+				}`,
+				`{
+					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
+					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"],
+					"wildcard": "true"
+				}`,
+				`{
+					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",
+					"at_least_one": ["9bcd4eec-9d9d-11f1-8f44-6ae246604903"],
+					"wildcard": 1
 				}`,
 				`{
 					"one": "9bcd4eec-9d9d-11f1-8f44-6ae246604903",

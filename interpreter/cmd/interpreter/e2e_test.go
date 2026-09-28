@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/project-kessel/ksl-schema-language/pkg/intermediate"
@@ -9,6 +10,7 @@ import (
 	"github.com/project-kessel/starlark-unified-schema/internal/output/ksil"
 	"github.com/project-kessel/starlark-unified-schema/internal/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestE2E(t *testing.T) {
@@ -215,9 +217,14 @@ call_ksl_extension("test", "role_binding", "rbac", relation="admin")
 		},
 		"container/reporters/special/container.json": {
 			Valid: []string{
-				`{
-					"direct_flag": "test/principal:*"
-				}`,
+				`{}`,
+				`{"direct_flag": true}`,
+				`{"direct_flag": false}`,
+			},
+			Invalid: []string{
+				`{"direct_flag": "test/principal:*"}`,
+				`{"direct_flag": "true"}`,
+				`{"direct_flag": 1}`,
 			},
 		},
 		"res/common_representation.json": {
@@ -242,6 +249,118 @@ call_ksl_extension("test", "role_binding", "rbac", relation="admin")
 			},
 		},
 	})
+}
+
+func TestShippedFeaturesWorkspaceWildcardInputs(t *testing.T) {
+	processor, reader := setupForTest(t)
+	for _, path := range []string{
+		"service/reporters/features/service.star",
+		"billing_account/reporters/features/billing_account.star",
+		"workspace/reporters/rbac/workspace.star",
+		"workspace/reporters/features/workspace.star",
+	} {
+		require.NoError(t, reader.AddRealSchemaFile(path))
+	}
+
+	const workspaceFile = "workspace/reporters/features/workspace.star"
+	jsonSchema := output.NewJSONSchemaVisitor()
+	require.NoError(t, processor.Process(jsonSchema, workspaceFile))
+	util.VerifyJSONSchemaResults(t, jsonSchema, map[string]util.JsonSchemaTestCase{
+		"workspace/common_representation.json": {
+			Valid: []string{`{}`},
+		},
+		"workspace/reporters/features/workspace.json": {
+			Valid: []string{
+				`{}`,
+				`{"desire_all_services": true, "ignore_inherited_desired_services": true, "ignore_inherited_paid_services": true}`,
+				`{"desire_all_services": false, "ignore_inherited_desired_services": false, "ignore_inherited_paid_services": false}`,
+			},
+			Invalid: []string{
+				`{"desire_all_services": "features/service:*"}`,
+				`{"ignore_inherited_desired_services": "features/service:*"}`,
+				`{"ignore_inherited_paid_services": "features/service:*"}`,
+				`{"desire_all_services": 1}`,
+				`{"ignore_inherited_desired_services": 1}`,
+				`{"ignore_inherited_paid_services": 1}`,
+			},
+		},
+	})
+
+	ksilVisitor := ksil.NewKSILVisitor()
+	require.NoError(t, processor.Process(ksilVisitor, workspaceFile))
+	entries, err := ksilVisitor.Results()
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.Equal(t, "features.json", entries[0].Path)
+
+	var namespace map[string]any
+	require.NoError(t, json.Unmarshal(entries[0].Contents, &namespace))
+	asMap := func(value any) map[string]any {
+		result, ok := value.(map[string]any)
+		require.True(t, ok)
+		return result
+	}
+	asList := func(value any) []any {
+		result, ok := value.([]any)
+		require.True(t, ok)
+		return result
+	}
+	asString := func(value any) string {
+		result, ok := value.(string)
+		require.True(t, ok)
+		return result
+	}
+
+	definedExtensions := asList(namespace["defined_extensions"])
+	require.Len(t, definedExtensions, 1)
+	dynamicTypes := asList(asMap(definedExtensions[0])["types"])
+	require.Len(t, dynamicTypes, 1)
+	dynamicRelations := asList(asMap(dynamicTypes[0])["relations"])
+	relationBodies := make(map[string]map[string]any, len(dynamicRelations))
+	for _, relation := range dynamicRelations {
+		relationMap := asMap(relation)
+		relationName := asString(asMap(relationMap["name"])["value"])
+		relationBodies[relationName] = asMap(relationMap["body"])
+	}
+
+	for _, name := range []string{
+		"features_workspace_desire_all_services",
+		"features_workspace_ignore_inherited_desired_services",
+		"features_workspace_ignore_inherited_paid_services",
+	} {
+		body := relationBodies[name]
+		require.NotNil(t, body, "missing wildcard relation %s", name)
+		assert.Equal(t, "self", body["kind"])
+		assert.Equal(t, "Any", body["cardinality"])
+		types := asList(body["types"])
+		require.Len(t, types, 1)
+		assert.Equal(t, map[string]any{"namespace": "features", "name": "service", "all": true}, asMap(types[0]))
+	}
+
+	paidServices := relationBodies["features_workspace__paid_services"]
+	assert.Equal(t, "union", paidServices["kind"])
+	paidServicesExclusion := asMap(paidServices["right"])
+	assert.Equal(t, "except", paidServicesExclusion["kind"])
+	assert.Equal(t, "features_workspace_ignore_inherited_paid_services",
+		asString(asMap(asMap(paidServicesExclusion["right"])["relation"])["value"]))
+
+	desiredServices := relationBodies["features_workspace__desired_services"]
+	assert.Equal(t, "union", desiredServices["kind"])
+	desiredServicesDirect := asMap(desiredServices["left"])
+	assert.Equal(t, "union", desiredServicesDirect["kind"])
+	assert.Equal(t, "features_workspace_desire_all_services",
+		asString(asMap(asMap(desiredServicesDirect["right"])["relation"])["value"]))
+	desiredServicesExclusion := asMap(desiredServices["right"])
+	assert.Equal(t, "except", desiredServicesExclusion["kind"])
+	assert.Equal(t, "features_workspace_ignore_inherited_desired_services",
+		asString(asMap(asMap(desiredServicesExclusion["right"])["relation"])["value"]))
+
+	enabledServices := relationBodies["features_workspace_enabled_services"]
+	assert.Equal(t, "intersect", enabledServices["kind"])
+	assert.Equal(t, "features_workspace__paid_services",
+		asString(asMap(asMap(enabledServices["left"])["relation"])["value"]))
+	assert.Equal(t, "features_workspace__desired_services",
+		asString(asMap(asMap(enabledServices["right"])["relation"])["value"]))
 }
 
 func setupForTest(t *testing.T) (*lang.Processor, *lang.InmemorySourceFileReader) {

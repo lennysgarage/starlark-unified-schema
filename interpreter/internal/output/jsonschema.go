@@ -233,14 +233,9 @@ func (v *JSONSchemaVisitor) VisitRelation(name string, reporter string, typeName
 		arrayType := v.VisitArrayDataType(idType)
 		return v.VisitDataField(name, false, nil, arrayType)
 	case "All":
-		wildcardType := v.VisitTextDataType(nil, nil, stringPtr(fmt.Sprintf(`^%s/%s:\*$`, reporter, typeName)))
-		return v.VisitDataField(name, false, nil, wildcardType)
+		return v.VisitDataField(name, false, nil, v.VisitBooleanDataType())
 	}
 	return nil
-}
-
-func stringPtr(s string) *string {
-	return &s
 }
 
 func (v *JSONSchemaVisitor) BeginPermission(name string) {}
