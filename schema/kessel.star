@@ -188,8 +188,21 @@ def _create_relation(cardinality, type):
         type=type,
     )
 
-def wildcard(type):
-    return _create_relation("All", type)
+def wildcard(type, **kwargs):
+    relation = _create_relation("All", type)
+    if not kwargs:
+        return relation
+    if len(kwargs) != 1 or "input" not in kwargs:
+        fail("wildcard: only the input annotation is supported")
+
+    # Keep the input annotation separate from the relation target so it cannot
+    # affect permission proxy behavior or authorization cardinality.
+    return struct(
+        kind=relation.kind,
+        cardinality=relation.cardinality,
+        type=relation.type,
+        input=kwargs["input"],
+    )
 
 def at_most_one(type):
     return _create_relation("AtMostOne", type)

@@ -32,11 +32,12 @@ container = resource("test", id_type=uuid(), fields={
 })`)
 
 	util.AddFile(t, reader, "special_container.star", `
-load("kessel.star", "resource", "wildcard")
+load("kessel.star", "resource", "wildcard", "boolean")
 load("principal.star", "principal")
 load("container.star", test_container="container")
 container = resource("special", extends=test_container, fields={
-	"direct_flag": wildcard(principal)
+	"direct_flag": wildcard(principal),
+	"direct_boolean_flag": wildcard(principal, input=boolean())
 }, permissions={
 	"flag": lambda r: r.direct_flag.union(r.parent.flag)
 })
@@ -166,6 +167,14 @@ call_ksl_extension("test", "role_binding", "rbac", relation="admin")
 									},
 								},
 								{
+									Name: &intermediate.DynamicName{Kind: "literal", Value: "special_container_direct_boolean_flag"},
+									Body: intermediate.DynamicRelationBody{
+										Kind:        "self",
+										Types:       []*intermediate.TypeReference{{Namespace: "test", Name: "principal", All: true}},
+										Cardinality: "Any",
+									},
+								},
+								{
 									Name: &intermediate.DynamicName{Kind: "literal", Value: "special_container_flag"},
 									Body: intermediate.DynamicRelationBody{
 										Kind: "union",
@@ -218,13 +227,17 @@ call_ksl_extension("test", "role_binding", "rbac", relation="admin")
 		"container/reporters/special/container.json": {
 			Valid: []string{
 				`{}`,
-				`{"direct_flag": true}`,
-				`{"direct_flag": false}`,
+				`{"direct_flag": "test/principal:*"}`,
+				`{"direct_boolean_flag": true}`,
+				`{"direct_boolean_flag": false}`,
+				`{"direct_flag": "test/principal:*", "direct_boolean_flag": true}`,
 			},
 			Invalid: []string{
-				`{"direct_flag": "test/principal:*"}`,
-				`{"direct_flag": "true"}`,
-				`{"direct_flag": 1}`,
+				`{"direct_flag": true}`,
+				`{"direct_flag": "test/other:*"}`,
+				`{"direct_boolean_flag": "test/principal:*"}`,
+				`{"direct_boolean_flag": "true"}`,
+				`{"direct_boolean_flag": 1}`,
 			},
 		},
 		"res/common_representation.json": {

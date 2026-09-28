@@ -11,6 +11,13 @@ type ResourceTypeReference struct {
 	Reporter string
 }
 
+// BooleanWildcardVisitor is an optional extension for visitors that support
+// boolean input annotations on wildcard relations.
+type BooleanWildcardVisitor interface {
+	// VisitBooleanWildcardRelation processes a wildcard relation with a boolean input.
+	VisitBooleanWildcardRelation(name, reporter, typeName string, idType any) (any, error)
+}
+
 type SchemaVisitor interface {
 	BeginType(name string)
 	VisitResource(typeName string, reporter string, commonMembers *Members, reporterMembers *Members, extendsResource *ResourceTypeReference) error
