@@ -1242,6 +1242,32 @@ this_resource = resource("test", id_type=uuid(), fields={
 	}`)
 }
 
+func TestProcessorExplicitNoneWildcardKeepsLegacyInput(t *testing.T) {
+	processor, reader := setupProcessorWithKessel(t)
+	util.AddFile(t, reader, "test/none_wildcard.star", `
+load("kessel.star", "resource", "uuid", "wildcard", "self")
+
+this_resource = resource("test", id_type=uuid(), fields={
+    "flag": wildcard(self(), input=None),
+})
+`)
+
+	spy := util.NewSpyVisitor()
+	visitor := &legacyCountingVisitor{SchemaVisitor: spy}
+	require.NoError(t, processor.Process(visitor))
+	assert.Equal(t, 1, visitor.relationCalls)
+	spy.AssertJSON(t, `{
+		"this_resource": {
+			"common": {},
+			"reporters": {
+				"test": {
+					"relations": [{"kind":"relation", "name":"flag", "reporter":"test", "typeName":"this_resource", "cardinality":"All", "dataType":{"kind":"uuid"}}]
+				}
+			}
+		}
+	}`)
+}
+
 func TestProcessorForwardsBooleanWildcardSeparatelyFromTargetIDType(t *testing.T) {
 	processor, reader := setupProcessorWithKessel(t)
 	util.AddFile(t, reader, "test/boolean_wildcard.star", `
@@ -1290,7 +1316,6 @@ func TestProcessorRejectsUnsupportedBooleanWildcardInputs(t *testing.T) {
 		"text":              "text()",
 		"enum":              `enum(["enabled", "disabled"])`,
 		"numeric":           "numeric_id()",
-		"none":              "None",
 		"non_type":          `"boolean"`,
 		"malformed_boolean": "struct(kind=\"boolean\", extra=True)",
 	}
