@@ -414,7 +414,7 @@ example = resource(
         "text_field": field(text(minLength=1, maxLength=100, regex="^[a-z]+$")),
         "uuid_field": field(uuid()),
         "numeric_field": field(numeric_id(min=1, max=1000)),
-        "bool_field": field(boolean()),
+        "bool_field": field(type=boolean()),
         "datetime_field": field(date_time()),
         "enum_field": field(enum(["active", "inactive"])),
         "nullable_field": field(nullable(text())),
@@ -440,8 +440,18 @@ example = resource(
 	testReporter := reporters["test"].(node)
 	fields := testReporter["fields"].([]any)
 
-	// Should have all 9 fields
+	// Should have all 9 fields, including boolean() as a data-only type.
 	assert.Len(t, fields, 9)
+	booleanFieldFound := false
+	for _, field := range fields {
+		dataField := field.(node)
+		if dataField["name"] == "bool_field" {
+			assert.Equal(t, node{"kind": "boolean"}, dataField["type"])
+			booleanFieldFound = true
+			break
+		}
+	}
+	assert.True(t, booleanFieldFound, "expected the boolean data field")
 }
 
 func TestCompile_MissingKesselStar(t *testing.T) {
@@ -656,7 +666,7 @@ load("kessel.star", "resource", "uuid", "text", "wildcard", "boolean")
 
 service = resource("features", id_type=text())
 workspace = resource("rbac", id_type=uuid(), fields={
-    "service": wildcard(service, input=boolean()),
+    "service": boolean(service),
 })
 `
 	visitor := &booleanWildcardTestVisitor{testSpyVisitor: newTestSpyVisitor()}
@@ -676,13 +686,53 @@ workspace = resource("rbac", id_type=uuid(), fields={
 	}`)
 }
 
-func TestCompile_RejectsBooleanWildcardForVisitorWithoutCapability(t *testing.T) {
+func TestCompile_RejectsWildcardInputKeyword(t *testing.T) {
 	kessel := loadKesselStar(t)
 	schema := `
 load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
 
 workspace = resource("rbac", id_type=uuid(), fields={
     "enabled": wildcard(self(), input=boolean()),
+})
+`
+	visitor := &booleanWildcardTestVisitor{testSpyVisitor: newTestSpyVisitor()}
+	err := Compile(map[string][]byte{
+		"kessel.star": kessel,
+		"test.star":   []byte(schema),
+	}, visitor)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "input")
+}
+
+func TestCompile_BooleanDataTypeRemainsAvailableForDataFields(t *testing.T) {
+	kessel := loadKesselStar(t)
+	schema := `
+load("kessel.star", "resource", "uuid", "field", "boolean")
+
+workspace = resource("rbac", id_type=uuid(), fields={
+    "enabled": field(type=boolean()),
+})
+`
+	visitor := newTestSpyVisitor()
+	err := Compile(map[string][]byte{
+		"kessel.star": kessel,
+		"test.star":   []byte(schema),
+	}, visitor)
+	require.NoError(t, err)
+	visitor.assertJSON(t, `{
+		"workspace": {"common": {}, "reporters": {"rbac": {
+			"fields": [{"name":"enabled", "required":false, "type":{"kind":"boolean"}}]
+		}}}
+	}`)
+}
+
+func TestCompile_RejectsBooleanWildcardForVisitorWithoutCapability(t *testing.T) {
+	kessel := loadKesselStar(t)
+	schema := `
+load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
+
+workspace = resource("rbac", id_type=uuid(), fields={
+    "enabled": boolean(self()),
 })
 `
 	visitor := newTestSpyVisitor()
@@ -701,7 +751,7 @@ func TestCompile_PropagatesBooleanWildcardVisitorError(t *testing.T) {
 load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
 
 workspace = resource("rbac", id_type=uuid(), fields={
-    "enabled": wildcard(self(), input=boolean()),
+    "enabled": boolean(self()),
 })
 `
 	sentinel := errors.New("boolean wildcard visitor failed")
@@ -725,7 +775,7 @@ func TestCompile_PermissionProxySeesBooleanWildcardAsRelation(t *testing.T) {
 load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
 
 workspace = resource("rbac", id_type=uuid(), fields={
-    "enabled": wildcard(self(), input=boolean()),
+    "enabled": boolean(self()),
 }, permissions={
     "can_use": lambda r: r.enabled,
 })

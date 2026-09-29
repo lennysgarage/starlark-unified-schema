@@ -27,11 +27,12 @@ type OutputEntry struct {
 }
 
 // BooleanWildcardVisitor is an optional extension for custom visitors that
-// support wildcard relations with boolean input annotations. Adding this
-// interface is source-compatible with existing SchemaVisitor implementations,
-// and unannotated schemas continue to use VisitRelation. Processing a schema
-// containing an annotated wildcard (including the Features schema) with a
-// visitor that does not implement this interface returns an error.
+// support boolean-backed wildcard relations created by boolean(target). Adding
+// this interface is source-compatible with existing SchemaVisitor
+// implementations, and schemas using wildcard(target) continue to use
+// VisitRelation. Processing a schema containing a boolean-backed wildcard
+// (including the Features schema) with a visitor that does not implement this
+// interface returns an error.
 type BooleanWildcardVisitor interface {
 	// VisitBooleanWildcardRelation processes a wildcard relation with a boolean input.
 	VisitBooleanWildcardRelation(name, reporter, typeName string, idType any) (any, error)

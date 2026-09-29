@@ -239,8 +239,8 @@ func (v *JSONSchemaVisitor) VisitRelation(name string, reporter string, typeName
 	return nil
 }
 
-// VisitBooleanWildcardRelation renders an explicitly boolean-annotated wildcard
-// relation as an optional boolean input field.
+// VisitBooleanWildcardRelation renders a boolean-backed wildcard relation as
+// an optional boolean input field.
 func (v *JSONSchemaVisitor) VisitBooleanWildcardRelation(name, reporter, typeName string, idType any) (any, error) {
 	return v.VisitDataField(name, false, nil, v.VisitBooleanDataType()), nil
 }

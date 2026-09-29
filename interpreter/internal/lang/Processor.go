@@ -240,7 +240,7 @@ func (p *Processor) visitMembers(self *starlarkstruct.Struct, fields *starlark.D
 			}
 
 			if cardinality != "All" {
-				return nil, fmt.Errorf("relation %s: input annotations are only supported for wildcard relations", fieldName)
+				return nil, fmt.Errorf("relation %s: boolean-backed inputs are only supported for wildcard relations", fieldName)
 			}
 			inputType, err := fieldStruct.Attr("input")
 			if err != nil {
@@ -281,8 +281,8 @@ func (p *Processor) visitMembers(self *starlarkstruct.Struct, fields *starlark.D
 	}, nil
 }
 
-// validateBooleanWildcardInput accepts only the canonical boolean() data type
-// shape; wildcard input annotations are deliberately narrower than field types.
+// validateBooleanWildcardInput accepts the canonical boolean() data type shape
+// stored separately on a boolean(target) wildcard relation.
 func validateBooleanWildcardInput(inputType starlark.Value) error {
 	typeStruct, ok := inputType.(*starlarkstruct.Struct)
 	if !ok {

@@ -12,7 +12,7 @@ type ResourceTypeReference struct {
 }
 
 // BooleanWildcardVisitor is an optional extension for visitors that support
-// boolean input annotations on wildcard relations.
+// boolean-backed wildcard relations created by boolean(target).
 type BooleanWildcardVisitor interface {
 	// VisitBooleanWildcardRelation processes a wildcard relation with a boolean input.
 	VisitBooleanWildcardRelation(name, reporter, typeName string, idType any) (any, error)

@@ -154,8 +154,11 @@ def uuid():
 def numeric_id(min=None, max=None):
     return struct(kind="numeric_id", min=min, max=max)
 
-def boolean():
-    return struct(kind="boolean")
+def boolean(target=None):
+    """Return a boolean data type, or a boolean-backed wildcard relation."""
+    if target == None:
+        return struct(kind="boolean")
+    return struct(kind="relation", cardinality="All", type=target, input=struct(kind="boolean"))
 
 def date_time():
     return struct(kind="date_time")
@@ -188,19 +191,8 @@ def _create_relation(cardinality, type):
         type=type,
     )
 
-def wildcard(type, input=None):
-    relation = _create_relation("All", type)
-    if input == None:
-        return relation
-
-    # Keep the input annotation separate from the relation target so it cannot
-    # affect permission proxy behavior or authorization cardinality.
-    return struct(
-        kind=relation.kind,
-        cardinality=relation.cardinality,
-        type=relation.type,
-        input=input,
-    )
+def wildcard(type):
+    return _create_relation("All", type)
 
 def at_most_one(type):
     return _create_relation("AtMostOne", type)

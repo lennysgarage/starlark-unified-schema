@@ -1,7 +1,6 @@
 package lang
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/project-kessel/starlark-unified-schema/internal/output"
@@ -1242,40 +1241,14 @@ this_resource = resource("test", id_type=uuid(), fields={
 	}`)
 }
 
-func TestProcessorExplicitNoneWildcardKeepsLegacyInput(t *testing.T) {
-	processor, reader := setupProcessorWithKessel(t)
-	util.AddFile(t, reader, "test/none_wildcard.star", `
-load("kessel.star", "resource", "uuid", "wildcard", "self")
-
-this_resource = resource("test", id_type=uuid(), fields={
-    "flag": wildcard(self(), input=None),
-})
-`)
-
-	spy := util.NewSpyVisitor()
-	visitor := &legacyCountingVisitor{SchemaVisitor: spy}
-	require.NoError(t, processor.Process(visitor))
-	assert.Equal(t, 1, visitor.relationCalls)
-	spy.AssertJSON(t, `{
-		"this_resource": {
-			"common": {},
-			"reporters": {
-				"test": {
-					"relations": [{"kind":"relation", "name":"flag", "reporter":"test", "typeName":"this_resource", "cardinality":"All", "dataType":{"kind":"uuid"}}]
-				}
-			}
-		}
-	}`)
-}
-
 func TestProcessorForwardsBooleanWildcardSeparatelyFromTargetIDType(t *testing.T) {
 	processor, reader := setupProcessorWithKessel(t)
 	util.AddFile(t, reader, "test/boolean_wildcard.star", `
-load("kessel.star", "resource", "uuid", "text", "wildcard", "boolean")
+load("kessel.star", "resource", "uuid", "text", "boolean")
 
 service = resource("features", id_type=text())
 workspace = resource("rbac", id_type=uuid(), fields={
-    "service": wildcard(service, input=boolean()),
+    "service": boolean(service),
 })
 `)
 
@@ -1296,10 +1269,10 @@ workspace = resource("rbac", id_type=uuid(), fields={
 func TestProcessorRejectsBooleanWildcardForLegacyVisitor(t *testing.T) {
 	processor, reader := setupProcessorWithKessel(t)
 	util.AddFile(t, reader, "test/unsupported_visitor.star", `
-load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
+load("kessel.star", "resource", "uuid", "boolean", "self")
 
 this_resource = resource("test", id_type=uuid(), fields={
-    "flag": wildcard(self(), input=boolean()),
+    "flag": boolean(self()),
 })
 `)
 
@@ -1311,39 +1284,13 @@ this_resource = resource("test", id_type=uuid(), fields={
 	assert.Zero(t, visitor.relationCalls, "annotated relations must not fall back to VisitRelation")
 }
 
-func TestProcessorRejectsUnsupportedBooleanWildcardInputs(t *testing.T) {
-	unsupportedInputs := map[string]string{
-		"text":              "text()",
-		"enum":              `enum(["enabled", "disabled"])`,
-		"numeric":           "numeric_id()",
-		"non_type":          `"boolean"`,
-		"malformed_boolean": "struct(kind=\"boolean\", extra=True)",
-	}
-
-	for name, inputExpression := range unsupportedInputs {
-		t.Run(name, func(t *testing.T) {
-			processor, reader := setupProcessorWithKessel(t)
-			util.AddFile(t, reader, "test/invalid_wildcard.star", fmt.Sprintf(`
-load("kessel.star", "resource", "uuid", "wildcard", "self", "boolean", "text", "enum", "numeric_id")
-
-this_resource = resource("test", id_type=uuid(), fields={
-    "flag": wildcard(self(), input=%s),
-})
-`, inputExpression))
-
-			_, err := processAndVisitForError(t, processor)
-			assert.ErrorContains(t, err, "wildcard relation flag input must be boolean()")
-		})
-	}
-}
-
 func TestBooleanWildcardRemainsAvailableToPermissionProxy(t *testing.T) {
 	processor, reader := setupProcessorWithKessel(t)
 	util.AddFile(t, reader, "test/boolean_wildcard_permission.star", `
-load("kessel.star", "resource", "uuid", "wildcard", "boolean", "self")
+load("kessel.star", "resource", "uuid", "boolean", "self")
 
 this_resource = resource("test", id_type=uuid(), fields={
-    "enabled": wildcard(self(), input=boolean()),
+    "enabled": boolean(self()),
 }, permissions={
     "can_use": lambda r: r.enabled,
 })

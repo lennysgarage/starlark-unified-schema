@@ -37,7 +37,7 @@ load("principal.star", "principal")
 load("container.star", test_container="container")
 container = resource("special", extends=test_container, fields={
 	"direct_flag": wildcard(principal),
-	"direct_boolean_flag": wildcard(principal, input=boolean())
+	"direct_boolean_flag": boolean(principal)
 }, permissions={
 	"flag": lambda r: r.direct_flag.union(r.parent.flag)
 })

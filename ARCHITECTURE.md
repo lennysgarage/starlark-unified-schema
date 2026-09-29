@@ -89,10 +89,10 @@ These map directly to inventory-api paths under `data/schema/resources/`.
 | Input from processor | JSON Schema output |
 |----------------------|-------------------|
 | Data fields | Object properties with types, constraints, `required` |
-| Relations | Mapped to input-field shapes by cardinality: `at_most_one` → optional scalar; `one` → required scalar; `at_least_one` → required array with at least one item; `many` → optional array; `wildcard` (`All`) → optional qualified marker string by default, or optional boolean when declared with `input=boolean()` |
+| Relations | Mapped to input-field shapes by cardinality: `at_most_one` → optional scalar; `one` → required scalar; `at_least_one` → required array with at least one item; `many` → optional array; `wildcard` (`All`) → optional qualified marker string; boolean-backed wildcard `boolean(target)` → optional boolean |
 | Permissions | Ignored |
 
-Resources are grouped by **type name** (the Starlark variable name, e.g. `host`). Relations use the target resource's `id_type`, not a nested object schema. An unannotated wildcard preserves the legacy optional `reporter/type:*` marker input. To opt into an optional JSON boolean (`true` or `false`, also omittable), declare `wildcard(target, input=boolean())`; this boolean form rejects the legacy marker. Both forms compile to the same typed wildcard relation in KSIL, and permission expressions are unchanged.
+Resources are grouped by **type name** (the Starlark variable name, e.g. `host`). Relations use the target resource's `id_type`, not a nested object schema. `wildcard(target)` preserves the legacy optional `reporter/type:*` marker input. The overloaded `boolean(target)` form creates an optional JSON boolean (`true` or `false`, also omittable) backed by the same typed wildcard relation; `boolean()` remains the boolean data-type constructor for `field(type=boolean())`. Both wildcard forms compile to the same typed relation in KSIL, and permission expressions are unchanged.
 
 ### 2. KSIL Output
 
@@ -288,8 +288,8 @@ The DSL lives in `schema/kessel.star` and is plain Starlark — the only custom 
 |-----------|------|
 | `resource(reporter, id_type, common={}, fields={}, permissions={})` | Defines a resource; returns a tagged struct consumed by the processor |
 | `field(type=..., required=..., description=...)` | Data field member |
-| `text`, `uuid`, `numeric_id`, `boolean`, `date_time`, `enum`, `nullable`, `union`, `array`, `object` | Data type constructors |
-| `at_most_one`, `one`, `at_least_one`, `many`, `wildcard` | Relation cardinality helpers; `wildcard(target)` keeps the qualified marker input, while `wildcard(target, input=boolean())` opts into an optional JSON boolean |
+| `text`, `uuid`, `numeric_id`, `boolean()`, `date_time`, `enum`, `nullable`, `union`, `array`, `object` | Data type constructors; `boolean(target)` also creates a boolean-backed wildcard relation |
+| `at_most_one`, `one`, `at_least_one`, `many`, `wildcard` | Relation cardinality helpers; `wildcard(target)` keeps the qualified marker input, while `boolean(target)` creates an optional JSON boolean wildcard |
 | `self()` | Relation target referring to the enclosing resource |
 | `permissions={ "name": lambda proxy: ... }` | Permission factories evaluated at schema load time |
 | `.union(...)`, `.intersect(...)`, `.except(...)` | Set operations available on relations and permissions when defining a permission. Ex: `lambda w: w.direct_value.union(w.parent.value)` |
@@ -399,7 +399,7 @@ type SchemaVisitor interface {
 
 #### Optional boolean-wildcard capability
 
-The public `compile.BooleanWildcardVisitor` interface is an additive opt-in; it does not change the required `SchemaVisitor` contract. Existing custom visitors remain source-compatible, and schemas using only unannotated relations continue to dispatch through `VisitRelation`. A schema with `wildcard(target, input=boolean())` dispatches through `VisitBooleanWildcardRelation`; processing such a schema (including the Features schema) with a visitor that does not implement the optional interface returns a contextual error instead of silently calling `VisitRelation`.
+The public `compile.BooleanWildcardVisitor` interface is an additive opt-in; it does not change the required `SchemaVisitor` contract. Existing custom visitors remain source-compatible, and schemas using only unannotated relations continue to dispatch through `VisitRelation`. A schema with a boolean-backed wildcard created by `boolean(target)` dispatches through `VisitBooleanWildcardRelation`; processing such a schema (including the Features schema) with a visitor that does not implement the optional interface returns a contextual error instead of silently calling `VisitRelation`.
 
 Visitors that only emit authorization schema may deliberately treat the annotated wildcard as the existing `All` relation:
 
